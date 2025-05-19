@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 # Import real data functions from tab6's data engineering module
 try:
-    from data_engineering_tab6 import (
+    from raul_seasonality_engineering import (
         generate_instrument_lists, 
         check_instrument_expiry_month_only, 
         check_month_status,
@@ -80,21 +80,21 @@ if REAL_DATA_AVAILABLE:
 else:
     st.markdown('<div class="data-source-indicator" style="background-color: #dc3545;">🔴 MOCK DATA</div>', unsafe_allow_html=True)
 
-# Mock data generation functions (fallback if real data not available)
-def generate_mock_price_data(instrument, start_date, end_date):
-    """Generate mock price data for demonstration (fallback)"""
-    dates = pd.date_range(start=start_date, end=end_date, freq='D')
-    np.random.seed(hash(instrument) % 2**32)  # Consistent seed per instrument
+# # Mock data generation functions (fallback if real data not available)
+# def generate_mock_price_data(instrument, start_date, end_date):
+#     """Generate mock price data for demonstration (fallback)"""
+#     dates = pd.date_range(start=start_date, end=end_date, freq='D')
+#     np.random.seed(hash(instrument) % 2**32)  # Consistent seed per instrument
     
-    # Generate realistic commodity price movements
-    returns = np.random.normal(0, 0.02, len(dates))
-    prices = 100 * np.exp(np.cumsum(returns))
+#     # Generate realistic commodity price movements
+#     returns = np.random.normal(0, 0.02, len(dates))
+#     prices = 100 * np.exp(np.cumsum(returns))
     
-    return pd.DataFrame({
-        'Date': dates,
-        'Close': prices,
-        'Instrument': instrument
-    })
+#     return pd.DataFrame({
+#         'Date': dates,
+#         'Close': prices,
+#         'Instrument': instrument
+#     })
 
 def fetch_real_data(instrument, max_retries=3, retry_delay=3):
     """Fetch real data for an instrument"""
@@ -125,7 +125,7 @@ def get_available_root_symbols(list_of_input_instruments=None):
             pass
     
     # Fallback to common root symbols
-    return ['/CL', '/GC', '/SI', '/ES', '/NQ', '/ZC', '/ZS', '/ZW', '/NG', '/HO']
+    return ['/CL', '/HO', '/GCL' '/GC', '/SI', '/ES', '/NQ', '/ZC', '/ZS', '/ZW', '/NG']
 
 def plot_spread_seasonality_enhanced(df_final, base_month_int, current_year):
     """Enhanced spread seasonality analysis (using the original from tab6 if available)"""
@@ -182,16 +182,6 @@ def plot_spread_seasonality_enhanced(df_final, base_month_int, current_year):
     
     plt.tight_layout()
     st.pyplot(fig)
-
-def plot_kde_distribution_enhanced(df_final):
-    """Enhanced KDE distribution plot (using the original from tab6 if available)"""
-    if REAL_DATA_AVAILABLE:
-        try:
-            # Use the original function from tab6
-            plot_kde_distribution(df_final)
-            return
-        except:
-            pass
     
     # Fallback implementation
     if df_final.empty:
@@ -324,7 +314,7 @@ def main():
             root_symbol = st.selectbox("Root Symbol", 
                                      available_root_symbols,
                                      help="Available root symbols")
-            custom_root = st.text_input("Or enter custom:", help="Custom root symbol")
+            custom_root = st.text_input("Or enter custom MV sybmol (eg. /GCL):", help="Custom root symbol")
             
         # Use custom root if provided, otherwise use selected
         final_root = custom_root.strip().upper() if custom_root else root_symbol
@@ -494,8 +484,8 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
                     df_comp = fetch_real_data(comp_instr, max_retries, retry_delay)
                 else:
                     # Generate mock data
-                    df_base = generate_mock_price_data(base_instr, start_date, end_date)
-                    df_comp = generate_mock_price_data(comp_instr, start_date, end_date)
+                    df_base = None#generate_mock_price_data(base_instr, start_date, end_date)
+                    df_comp = None#generate_mock_price_data(comp_instr, start_date, end_date)
                 
                 if df_base is None or df_comp is None or df_base.empty or df_comp.empty:
                     continue
@@ -525,21 +515,18 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
             df_final = df_final[['Date', 'Base_Instrument', 'Comp_Instrument', 'Base_Close', 'Comp_Close', 'Spread']]
             
             # Display summary statistics
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)#, col4 = st.columns(4)
             with col1:
                 st.metric("Total Records", f"{len(df_final):,}")
             with col2:
                 st.metric("Mean Spread", f"{df_final['Spread'].mean():.3f}")
             with col3:
                 st.metric("Std Deviation", f"{df_final['Spread'].std():.3f}")
-            with col4:
-                sharpe_like = df_final['Spread'].mean()/df_final['Spread'].std() if df_final['Spread'].std() != 0 else 0
-                st.metric("Sharpe-like Ratio", f"{sharpe_like:.3f}")
             
             # Generate plots
             base_month_int = MONTH_CODE_MAP[config['base_month']]
-            plot_spread_seasonality_enhanced(df_final, base_month_int, current_year)
-            plot_kde_distribution_enhanced(df_final)
+            plot_spread_seasonality(df_final, base_month_int, current_year)
+            plot_kde_distribution(df_final)
             
             # Data preview
             with st.expander(f"📊 Detailed Data for {config['name']}", expanded=False):
