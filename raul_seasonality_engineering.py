@@ -326,31 +326,36 @@ def check_month_status(month_code_map):
 
     return status_dict
 
-# def plot_spread_seasonality(df_final, base_month_int,current_year):
+# def plot_spread_seasonality(df_final, base_month_int, current_year):
 #     # Ensure proper types
 #     df_final['Date'] = pd.to_datetime(df_final['Date'])
 
 #     # Extract year from Base_Instrument (last 2 digits)
 #     df_final['Year'] = df_final['Base_Instrument'].str.extract(r'(\d{2})$').astype(int) + 2000
 
-#     # Sort in descending order by Year and Date to get the most recent data first
-#     df_final = df_final.sort_values(['Year', 'Date'], ascending=[False, False]).copy()
-
-#     # Compute trading day index per year (1 to 252 max)
-#     df_final['TradingDayOfYear'] = (
-#         df_final.groupby(['Year'])
-#         .cumcount() + 1
-#     )
+#     # Sort by Year (descending) and Date (ascending) - FIX #1: Dates should be ascending within each year
+#     df_final = df_final.sort_values(['Year', 'Date'], ascending=[False, True]).copy()
 
 #     # Get the latest year
 #     latest_year = df_final['Year'].max()
 #     start_date_for_latest_year = pd.to_datetime(f"{latest_year-1}-{base_month_int:02d}-01")
-#     df_final.loc[df_final['Year'] == latest_year, 'Date'] = df_final['Date'].where(df_final['Date'] >= start_date_for_latest_year)
+    
+#     # Filter data for the latest year to only include dates starting from base_month_int
+#     df_final = df_final[
+#         (df_final['Year'] != latest_year) | 
+#         (df_final['Date'] >= start_date_for_latest_year)
+#     ].copy()
 
-#     # After applying the date filter, we remove rows with NaT (Not a Time) for the latest year
-#     df_final = df_final.dropna(subset=['Date'])
+#     # FIX #2: Create proper seasonal trading day index
+#     # For each year, create trading day index starting from the base month
+#     def assign_seasonal_trading_day(group):
+#         group = group.sort_values('Date')
+#         group['SeasonalTradingDay'] = range(1, len(group) + 1)
+#         return group
+    
+#     df_final = df_final.groupby('Year').apply(assign_seasonal_trading_day).reset_index(drop=True)
 
-#     # Select the latest 252 trading days for each year
+#     # Select the first 252 trading days for each year (now that they're properly ordered)
 #     df_final = df_final.groupby('Year').head(252)
 
 #     # Plot
@@ -363,7 +368,7 @@ def check_month_status(month_code_map):
 #         line_style = dict(width=4, dash='solid') if year == latest_year else dict(width=2, dash='dot')
         
 #         fig.add_trace(go.Scatter(
-#             x=group['TradingDayOfYear'],
+#             x=group['SeasonalTradingDay'],  # Use the new seasonal trading day index
 #             y=group['Spread'],
 #             mode='lines',
 #             name=year_label,
@@ -372,11 +377,11 @@ def check_month_status(month_code_map):
 #             opacity=0.85
 #         ))
 
-#     # X-axis month ticks starting from meta_A_month_int
+#     # X-axis month ticks starting from base_month_int
 #     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
 #                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 #     month_labels = [month_names[(base_month_int - 1 + i) % 12] for i in range(12)]
-#     month_positions = [i * 21 for i in range(12)]  # ~21 trading days per month
+#     month_positions = [i * 21 + 1 for i in range(12)]  # Start from 1, not 0
 
 #     fig.update_layout(
 #         title=f"📊 Spread Seasonality Chart (Starting from {month_names[base_month_int - 1]})",
@@ -389,14 +394,142 @@ def check_month_status(month_code_map):
 
 #     st.plotly_chart(fig, use_container_width=True)
 
-def plot_spread_seasonality(df_final, base_month_int, current_year):
+
+# def plot_kde_distribution(df_final):
+#     import numpy as np
+#     import pandas as pd
+#     import plotly.graph_objects as go
+#     from plotly.subplots import make_subplots
+#     from scipy.stats import gaussian_kde, norm
+#     import streamlit as st
+
+#     # Extract spread data
+#     spread_data = df_final['Spread'].dropna().values
+#     mean_val = np.mean(spread_data)
+#     median_val = np.median(spread_data)
+#     std_dev = np.std(spread_data)
+    
+#     # Confidence interval
+#     z_score = norm.ppf(0.975)
+#     ci_lower = mean_val - z_score * std_dev / np.sqrt(len(spread_data))
+#     ci_upper = mean_val + z_score * std_dev / np.sqrt(len(spread_data))
+
+#     # KDE
+#     kde = gaussian_kde(spread_data)
+#     x_range = np.linspace(min(spread_data), max(spread_data), 1000)
+#     kde_values = kde(x_range)
+
+#     # Subplots
+#     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3], vertical_spacing=0.08)
+
+#     # KDE + histogram
+#     fig.add_trace(go.Histogram(
+#         x=spread_data,
+#         nbinsx=30,
+#         histnorm='probability density',
+#         marker_color='rgba(100, 100, 255, 0.3)',
+#         opacity=0.6,
+#         name='Histogram'
+#     ), row=1, col=1)
+
+#     fig.add_trace(go.Scatter(
+#         x=x_range,
+#         y=kde_values,
+#         mode='lines',
+#         line=dict(color='royalblue', width=3),
+#         name='KDE'
+#     ), row=1, col=1)
+
+#     # Mean, median, CI
+#     for val, label, style in [
+#         (mean_val, f"Mean: {mean_val:.4f}", 'solid'),
+#         (median_val, f"Median: {median_val:.4f}", 'dash'),
+#         (ci_lower, f"95% CI Lower", 'dot'),
+#         (ci_upper, f"95% CI Upper", 'dot')
+#     ]:
+#         fig.add_trace(go.Scatter(
+#             x=[val, val],
+#             y=[0, max(kde_values) * 1.05],
+#             mode='lines',
+#             name=label,
+#             line=dict(color='gray', dash=style, width=2),
+#             hoverinfo='name'
+#         ), row=1, col=1)
+
+#     # Boxplot
+#     fig.add_trace(go.Box(
+#         x=spread_data,
+#         boxpoints='outliers',
+#         marker_color='royalblue',
+#         name='Boxplot',
+#         boxmean='sd'
+#     ), row=2, col=1)
+
+#     # Layout
+#     fig.update_layout(
+#         title=dict(text="Spread Distribution", x=0.5, font_size=20),
+#         height=700,
+#         showlegend=True,
+#         legend=dict(
+#             orientation="h",
+#             yanchor="bottom",
+#             y=1.02,
+#             xanchor="center",
+#             x=0.5
+#         ),
+#         margin=dict(t=80, l=40, r=40, b=60),
+#         plot_bgcolor='white',
+#         paper_bgcolor='white',
+#     )
+
+#     fig.update_xaxes(
+#         title_text="Spread Value",
+#         showgrid=True,
+#         gridcolor='rgba(200,200,200,0.2)',
+#         zeroline=False
+#     )
+#     fig.update_yaxes(
+#         title_text="Density",
+#         showgrid=True,
+#         gridcolor='rgba(200,200,200,0.2)',
+#         zeroline=False,
+#         row=1, col=1
+#     )
+#     fig.update_yaxes(visible=False, row=2, col=1)
+
+#     # Streamlit display
+#     st.plotly_chart(fig, use_container_width=True)
+
+#     with st.expander("📊 Distribution Stats"):
+#         st.metric("Mean", f"{mean_val:.4f}")
+#         st.metric("Median", f"{median_val:.4f}")
+#         st.metric("Std Dev", f"{std_dev:.4f}")
+#         st.metric("95% CI", f"[{ci_lower:.4f}, {ci_upper:.4f}]")
+
+
+# Updated plotting functions with month filtering
+
+def plot_spread_seasonality(df_final, base_month_int, current_year, month_range=None):
+    """
+    Plot spread seasonality with optional month filtering
+    
+    Parameters:
+    - df_final: DataFrame with spread data
+    - base_month_int: Base month as integer (1-12)
+    - current_year: Current year
+    - month_range: Tuple (start_month, end_month) for filtering, both inclusive
+    """
+    import plotly.graph_objects as go
+    import pandas as pd
+    import streamlit as st
+    
     # Ensure proper types
     df_final['Date'] = pd.to_datetime(df_final['Date'])
 
     # Extract year from Base_Instrument (last 2 digits)
     df_final['Year'] = df_final['Base_Instrument'].str.extract(r'(\d{2})$').astype(int) + 2000
 
-    # Sort by Year (descending) and Date (ascending) - FIX #1: Dates should be ascending within each year
+    # Sort by Year (descending) and Date (ascending)
     df_final = df_final.sort_values(['Year', 'Date'], ascending=[False, True]).copy()
 
     # Get the latest year
@@ -409,16 +542,34 @@ def plot_spread_seasonality(df_final, base_month_int, current_year):
         (df_final['Date'] >= start_date_for_latest_year)
     ].copy()
 
-    # FIX #2: Create proper seasonal trading day index
-    # For each year, create trading day index starting from the base month
+    # Create proper seasonal trading day index
     def assign_seasonal_trading_day(group):
         group = group.sort_values('Date')
         group['SeasonalTradingDay'] = range(1, len(group) + 1)
+        # Add month relative to base month for filtering
+        group['Month'] = group['Date'].dt.month
+        group['MonthFromBase'] = ((group['Month'] - base_month_int) % 12) + 1
         return group
     
     df_final = df_final.groupby('Year').apply(assign_seasonal_trading_day).reset_index(drop=True)
 
-    # Select the first 252 trading days for each year (now that they're properly ordered)
+    # Apply month filtering if specified
+    if month_range:
+        start_month, end_month = month_range
+        if start_month <= end_month:
+            # Normal range (e.g., 3 to 8)
+            df_final = df_final[
+                (df_final['MonthFromBase'] >= start_month) & 
+                (df_final['MonthFromBase'] <= end_month)
+            ].copy()
+        else:
+            # Wrap-around range (e.g., 10 to 2 means 10-12 and 1-2)
+            df_final = df_final[
+                (df_final['MonthFromBase'] >= start_month) | 
+                (df_final['MonthFromBase'] <= end_month)
+            ].copy()
+    
+    # Select the first 252 trading days for each year (or available data if less)
     df_final = df_final.groupby('Year').head(252)
 
     # Plot
@@ -431,7 +582,7 @@ def plot_spread_seasonality(df_final, base_month_int, current_year):
         line_style = dict(width=4, dash='solid') if year == latest_year else dict(width=2, dash='dot')
         
         fig.add_trace(go.Scatter(
-            x=group['SeasonalTradingDay'],  # Use the new seasonal trading day index
+            x=group['SeasonalTradingDay'],
             y=group['Spread'],
             mode='lines',
             name=year_label,
@@ -440,15 +591,48 @@ def plot_spread_seasonality(df_final, base_month_int, current_year):
             opacity=0.85
         ))
 
-    # X-axis month ticks starting from base_month_int
+    # X-axis month ticks - adjust based on filtering
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    month_labels = [month_names[(base_month_int - 1 + i) % 12] for i in range(12)]
-    month_positions = [i * 21 + 1 for i in range(12)]  # Start from 1, not 0
+    
+    if month_range:
+        start_month, end_month = month_range
+        if start_month <= end_month:
+            filtered_months = list(range(start_month, end_month + 1))
+        else:
+            filtered_months = list(range(start_month, 13)) + list(range(1, end_month + 1))
+        
+        month_labels = [month_names[(base_month_int - 1 + i - 1) % 12] for i in filtered_months]
+        # Calculate positions based on actual data
+        if not df_final.empty:
+            month_positions = []
+            for i, month_num in enumerate(filtered_months):
+                month_data = df_final[df_final['MonthFromBase'] == month_num]
+                if not month_data.empty:
+                    # Use the first trading day of each month
+                    pos = month_data['SeasonalTradingDay'].min()
+                    month_positions.append(pos)
+                else:
+                    # Estimate position
+                    month_positions.append(i * 21 + 1)
+    else:
+        month_labels = [month_names[(base_month_int - 1 + i) % 12] for i in range(12)]
+        month_positions = [i * 21 + 1 for i in range(12)]
 
+    # Create title with filter info
+    filter_info = ""
+    if month_range:
+        start_name = month_names[(base_month_int - 1 + month_range[0] - 1) % 12]
+        end_name = month_names[(base_month_int - 1 + month_range[1] - 1) % 12]
+        filter_info = f" (Filtered: {start_name} to {end_name})"
+    
     fig.update_layout(
-        title=f"📊 Spread Seasonality Chart (Starting from {month_names[base_month_int - 1]})",
-        xaxis=dict(title="Month", tickvals=month_positions, ticktext=month_labels),
+        title=f"📊 Spread Seasonality Chart{filter_info}",
+        xaxis=dict(
+            title="Month", 
+            tickvals=month_positions[:len(month_labels)], 
+            ticktext=month_labels
+        ),
         yaxis_title="Spread",
         height=600,
         template="plotly_white",
@@ -458,7 +642,14 @@ def plot_spread_seasonality(df_final, base_month_int, current_year):
     st.plotly_chart(fig, use_container_width=True)
 
 
-def plot_kde_distribution(df_final):
+def plot_kde_distribution(df_final, month_range=None):
+    """
+    Plot KDE distribution with optional month filtering
+    
+    Parameters:
+    - df_final: DataFrame with spread data
+    - month_range: Tuple (start_month, end_month) for filtering, both inclusive
+    """
     import numpy as np
     import pandas as pd
     import plotly.graph_objects as go
@@ -466,8 +657,29 @@ def plot_kde_distribution(df_final):
     from scipy.stats import gaussian_kde, norm
     import streamlit as st
 
+    # Apply month filtering if specified
+    if month_range and 'MonthFromBase' in df_final.columns:
+        start_month, end_month = month_range
+        if start_month <= end_month:
+            df_filtered = df_final[
+                (df_final['MonthFromBase'] >= start_month) & 
+                (df_final['MonthFromBase'] <= end_month)
+            ].copy()
+        else:
+            df_filtered = df_final[
+                (df_final['MonthFromBase'] >= start_month) | 
+                (df_final['MonthFromBase'] <= end_month)
+            ].copy()
+    else:
+        df_filtered = df_final.copy()
+
     # Extract spread data
-    spread_data = df_final['Spread'].dropna().values
+    spread_data = df_filtered['Spread'].dropna().values
+    
+    if len(spread_data) == 0:
+        st.warning("No data available for the selected month range.")
+        return
+    
     mean_val = np.mean(spread_data)
     median_val = np.median(spread_data)
     std_dev = np.std(spread_data)
@@ -528,9 +740,17 @@ def plot_kde_distribution(df_final):
         boxmean='sd'
     ), row=2, col=1)
 
+    # Create title with filter info
+    filter_info = ""
+    if month_range:
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        # This is simplified - you might need to adjust based on your base_month_int
+        filter_info = f" (Filtered Data: {len(spread_data)} points)"
+
     # Layout
     fig.update_layout(
-        title=dict(text="Spread Distribution", x=0.5, font_size=20),
+        title=dict(text=f"Spread Distribution{filter_info}", x=0.5, font_size=20),
         height=700,
         showlegend=True,
         legend=dict(
@@ -564,8 +784,68 @@ def plot_kde_distribution(df_final):
     st.plotly_chart(fig, use_container_width=True)
 
     with st.expander("📊 Distribution Stats"):
-        st.metric("Mean", f"{mean_val:.4f}")
-        st.metric("Median", f"{median_val:.4f}")
-        st.metric("Std Dev", f"{std_dev:.4f}")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Mean", f"{mean_val:.4f}")
+        with col2:
+            st.metric("Median", f"{median_val:.4f}")
+        with col3:
+            st.metric("Std Dev", f"{std_dev:.4f}")
+        with col4:
+            st.metric("Sample Size", f"{len(spread_data):,}")
+        
         st.metric("95% CI", f"[{ci_lower:.4f}, {ci_upper:.4f}]")
+
+
+# Updated process_spreads function to include the month filter
+def process_spreads_with_filter(spread_configs, start_date, end_date, years_back, max_retries, retry_delay, month_filter=None):
+    """Process spread configurations with optional month filtering"""
+    import streamlit as st
+    import pandas as pd
+    
+    for i, config in enumerate(spread_configs):
+        st.markdown("---")
+        st.markdown(f"### 📈 Analysis {i+1}: {config['name']}")
+        
+        # Add month filter controls for this specific spread
+        if month_filter:
+            st.markdown("#### 📅 Month Filter")
+            col1, col2, col3 = st.columns([1, 1, 1])
+            
+            month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            
+            with col1:
+                use_filter = st.checkbox(f"Enable month filter for {config['name']}", key=f"filter_{i}")
+            
+            if use_filter:
+                with col2:
+                    start_month = st.selectbox(
+                        "Start Month (relative to base)", 
+                        options=list(range(1, 13)),
+                        format_func=lambda x: f"{x} ({month_names[(config.get('base_month_int', 1) - 1 + x - 1) % 12]})",
+                        index=0,
+                        key=f"start_{i}"
+                    )
+                with col3:
+                    end_month = st.selectbox(
+                        "End Month (relative to base)", 
+                        options=list(range(1, 13)),
+                        format_func=lambda x: f"{x} ({month_names[(config.get('base_month_int', 1) - 1 + x - 1) % 12]})",
+                        index=11,
+                        key=f"end_{i}"
+                    )
+                month_range = (start_month, end_month)
+            else:
+                month_range = None
+        else:
+            month_range = None
+        
+        # [Rest of the original process_spreads logic here...]
+        # Generate instrument combinations, fetch data, calculate spreads
+        
+        # When calling the plotting functions, pass the month_range parameter:
+        # plot_spread_seasonality(df_final, base_month_int, current_year, month_range)
+        # plot_kde_distribution(df_final, month_range)
+
 

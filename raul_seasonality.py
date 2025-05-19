@@ -80,21 +80,35 @@ if REAL_DATA_AVAILABLE:
 else:
     st.markdown('<div class="data-source-indicator" style="background-color: #dc3545;">🔴 MOCK DATA</div>', unsafe_allow_html=True)
 
-# # Mock data generation functions (fallback if real data not available)
-# def generate_mock_price_data(instrument, start_date, end_date):
-#     """Generate mock price data for demonstration (fallback)"""
-#     dates = pd.date_range(start=start_date, end=end_date, freq='D')
-#     np.random.seed(hash(instrument) % 2**32)  # Consistent seed per instrument
+# Add this to your sidebar configuration section:
+def add_month_filter_controls():
+    """Add month filter controls to the sidebar"""
+    st.subheader("📅 Month Filter")
     
-#     # Generate realistic commodity price movements
-#     returns = np.random.normal(0, 0.02, len(dates))
-#     prices = 100 * np.exp(np.cumsum(returns))
+    enable_filter = st.checkbox("Enable month filtering", help="Filter data to specific months relative to the base month")
     
-#     return pd.DataFrame({
-#         'Date': dates,
-#         'Close': prices,
-#         'Instrument': instrument
-#     })
+    if enable_filter:
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        # Two-value slider for month range
+        month_range = st.slider(
+            "Month range (relative to base month)",
+            min_value=1,
+            max_value=12,
+            value=(1, 12),
+            help="Select months 1-12 relative to the base contract month"
+        )
+        
+        # Show explanation
+        #st.info(f"Months {month_range[0]} to {month_range[1]} relative to base month will be included")
+        st.info(f"Months {month_range[0]} to {month_range[1]}")
+        # Advanced: Show actual month names if base month is known
+        # This would require passing the base month from the main configuration
+        
+        return month_range
+    else:
+        return None
 
 def fetch_real_data(instrument, max_retries=3, retry_delay=3):
     """Fetch real data for an instrument"""
@@ -291,6 +305,9 @@ def main():
         for month, status in month_status.items():
             color = "🔴" if status == "expired_month" else "🟢"
             st.write(f"{color} {month}: {status.replace('_', ' ').title()}")
+        
+        month_filter = add_month_filter_controls()
+
     
     # Main content
     st.markdown("## 🔍 Configure Spread Analysis")
@@ -298,15 +315,15 @@ def main():
     # Input method selection
     input_method = st.radio(
         "Input method:",
-        ["Quick Selection", "Table Input"],
+        ["Single Spread Selection", "Table Input"],
         help="Quick Selection: Single spread analysis. Table Input: Multiple spreads."
     )
     
     # Get available root symbols
     available_root_symbols = get_available_root_symbols(list_of_input_instruments)
     
-    if input_method == "Quick Selection":
-        st.markdown("### 🎯 Quick Selection")
+    if input_method == "Single Spread Selection":
+        st.markdown("### 🎯 Single Spread Selection")
         
         col1, col2, col3 = st.columns(3)
         
@@ -337,7 +354,7 @@ def main():
                     'comparison_month': comp_month,
                     'name': f"{final_root} {comp_month}-{base_month}"
                 }]
-                process_spreads(spread_configs, start_date, end_date, years_back, max_retries, retry_delay)
+                process_spreads(spread_configs, start_date, end_date, years_back, max_retries, retry_delay, month_filter)
             else:
                 st.error("Please ensure root symbol is provided and months are different")
     
@@ -412,11 +429,12 @@ def main():
                 st.success(f"✅ {len(spread_configs)} valid spread configuration(s)")
                 
                 if st.button("🚀 Analyze All Spreads", type="primary"):
-                    process_spreads(spread_configs, start_date, end_date, years_back, max_retries, retry_delay)
+                    process_spreads(spread_configs, start_date, end_date, years_back, max_retries, retry_delay, month_filter)
             else:
                 st.warning("No valid configurations found")
 
-def process_spreads(spread_configs, start_date, end_date, years_back, max_retries, retry_delay):
+# Update your process_spreads function to use the filter:
+def process_spreads(spread_configs, start_date, end_date, years_back, max_retries, retry_delay, month_filter=None):
     """Process spread configurations and generate analysis using real or mock data"""
     
     for i, config in enumerate(spread_configs):
@@ -483,9 +501,9 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
                     df_base = fetch_real_data(base_instr, max_retries, retry_delay)
                     df_comp = fetch_real_data(comp_instr, max_retries, retry_delay)
                 else:
-                    # Generate mock data
-                    df_base = None#generate_mock_price_data(base_instr, start_date, end_date)
-                    df_comp = None#generate_mock_price_data(comp_instr, start_date, end_date)
+                    # Generate mock data would go here
+                    df_base = None
+                    df_comp = None
                 
                 if df_base is None or df_comp is None or df_base.empty or df_comp.empty:
                     continue
@@ -508,14 +526,26 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
         # Clear progress indicators
         progress_bar.empty()
         status_text.empty()
-        
+
         if spread_dfs:
             # Combine all spread data
             df_final = pd.concat(spread_dfs, ignore_index=True)
             df_final = df_final[['Date', 'Base_Instrument', 'Comp_Instrument', 'Base_Close', 'Comp_Close', 'Spread']]
             
+            # Apply month filtering information for display
+            filtered_info = ""
+            if month_filter:
+                month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                base_month_int = MONTH_CODE_MAP[config['base_month']]
+                start_name = month_names[(base_month_int - 1 + month_filter[0] - 1) % 12]
+                end_name = month_names[(base_month_int - 1 + month_filter[1] - 1) % 12]
+                filtered_info = f" (Filtered: {start_name} to {end_name})"
+            
             # Display summary statistics
-            col1, col2, col3 = st.columns(3)#, col4 = st.columns(4)
+            st.markdown(f"#### Summary Statistics{filtered_info}")
+            
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Total Records", f"{len(df_final):,}")
             with col2:
@@ -523,33 +553,38 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
             with col3:
                 st.metric("Std Deviation", f"{df_final['Spread'].std():.3f}")
             
-            # Generate plots
+            # Generate plots with month filtering
             base_month_int = MONTH_CODE_MAP[config['base_month']]
-            plot_spread_seasonality(df_final, base_month_int, current_year)
-            plot_kde_distribution(df_final)
+            
+            # Call updated plotting functions with month_filter parameter
+            plot_spread_seasonality(df_final, base_month_int, current_year, month_filter)
+            plot_kde_distribution(df_final, month_filter)
             
             # Data preview
             with st.expander(f"📊 Detailed Data for {config['name']}", expanded=False):
-                st.dataframe(df_final, use_container_width=True)
+                # Show filtered data count if filter is applied
+                if month_filter and 'MonthFromBase' in df_final.columns:
+                    start_month, end_month = month_filter
+                    if start_month <= end_month:
+                        filtered_df = df_final[
+                            (df_final['MonthFromBase'] >= start_month) & 
+                            (df_final['MonthFromBase'] <= end_month)
+                        ]
+                    else:
+                        filtered_df = df_final[
+                            (df_final['MonthFromBase'] >= start_month) | 
+                            (df_final['MonthFromBase'] <= end_month)
+                        ]
+                    st.info(f"Showing {len(filtered_df):,} records out of {len(df_final):,} total records (filtered)")
+                    st.dataframe(filtered_df, use_container_width=True)
+                else:
+                    st.dataframe(df_final, use_container_width=True)
                 
                 # Additional statistics
                 st.subheader("📈 Statistical Summary")
                 summary_stats = df_final['Spread'].describe()
                 st.dataframe(summary_stats.to_frame().T, use_container_width=True)
-                
-                # Correlation analysis if multiple instruments
-                if len(spread_dfs) > 1:
-                    st.subheader("📊 Year-over-Year Correlation")
-                    yearly_spreads = df_final.pivot_table(
-                        values='Spread', 
-                        index=pd.to_datetime(df_final['Date']).dt.dayofyear,
-                        columns=pd.to_datetime(df_final['Date']).dt.year,
-                        aggfunc='mean'
-                    )
-                    correlation_matrix = yearly_spreads.corr()
-                    st.dataframe(correlation_matrix, use_container_width=True)
         else:
             st.error(f"❌ No data available for {config['name']}")
-
 if __name__ == "__main__":
     main()
