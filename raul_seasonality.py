@@ -1,4 +1,4 @@
-#raul_seasonality_with_real_data.py
+#raul_seasonality.py
 
 import streamlit as st
 import pandas as pd
