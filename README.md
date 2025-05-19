@@ -1,4 +1,4 @@
-# 🛢️ Project Spartan – Installation Guide
+# 🛢️ Project Spartan (Spread Analyzer Only) – Installation Guide
 
 This guide will walk you through setting up and running **Project Spartan** step-by-step.
 

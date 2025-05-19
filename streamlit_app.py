@@ -174,33 +174,3 @@ tab6, = st.tabs(["🌦️ Raul-Seasonality-Spreads"])
 
 with tab6:
     render_tab6(list_of_input_instruments)
-
-# with tab1:
-#     render_tab1(
-#         merged_data=merged_data,
-#         group_A_name=group_A_name,
-#         group_B_name=group_B_name,
-#         chart_height=chart_height,
-#         COLORS=COLORS
-#     )
-
-# with tab2:
-#     render_tab2(tab2, merged_data, rolling_window, chart_height, COLORS, group_A_name, group_B_name)
-
-# with tab3:
-#     render_tab3(merged_data, [group_A_name, group_B_name],meta_A_month_int,list_of_input_instruments)
-
-# with tab4:
-#     render_tab4(
-#         merged_data=merged_data,
-#         group_A_name=group_A_name,
-#         group_B_name=group_B_name,
-#         var_confidence=var_confidence,
-#         COLORS=COLORS
-#     )
-
-# with tab5:
-#     render_tab5(merged_data, [group_A_name, group_B_name],meta_A_month_int,list_of_input_instruments)
-
-# with tab6:
-#     render_tab6(list_of_input_instruments)
