@@ -327,137 +327,6 @@ def check_month_status(month_code_map):
 
     return status_dict
 
-# def plot_spread_seasonality(df_final, base_month_int, current_year, month_range=None):
-#     """
-#     Plot spread seasonality with optional month filtering
-    
-#     Parameters:
-#     - df_final: DataFrame with spread data
-#     - base_month_int: Base month as integer (1-12)
-#     - current_year: Current year
-#     - month_range: Tuple (start_month, end_month) for filtering, both inclusive
-#     """
-#     import plotly.graph_objects as go
-#     import pandas as pd
-#     import streamlit as st
-    
-#     # Ensure proper types
-#     df_final['Date'] = pd.to_datetime(df_final['Date'])
-
-#     # Extract year from Base_Instrument (last 2 digits)
-#     df_final['Year'] = df_final['Base_Instrument'].str.extract(r'(\d{2})$').astype(int) + 2000
-
-#     # Sort by Year (descending) and Date (ascending)
-#     df_final = df_final.sort_values(['Year', 'Date'], ascending=[False, True]).copy()
-
-#     # Get the latest year
-#     latest_year = df_final['Year'].max()
-#     start_date_for_latest_year = pd.to_datetime(f"{latest_year-1}-{base_month_int:02d}-01")
-    
-#     # Filter data for the latest year to only include dates starting from base_month_int
-#     df_final = df_final[
-#         (df_final['Year'] != latest_year) | 
-#         (df_final['Date'] >= start_date_for_latest_year)
-#     ].copy()
-
-#     # Create proper seasonal trading day index
-#     def assign_seasonal_trading_day(group):
-#         group = group.sort_values('Date')
-#         group['SeasonalTradingDay'] = range(1, len(group) + 1)
-#         # Add month relative to base month for filtering
-#         group['Month'] = group['Date'].dt.month
-#         group['MonthFromBase'] = ((group['Month'] - base_month_int) % 12) + 1
-#         return group
-    
-#     df_final = df_final.groupby('Year').apply(assign_seasonal_trading_day).reset_index(drop=True)
-
-#     # Apply month filtering if specified
-#     if month_range:
-#         start_month, end_month = month_range
-#         if start_month <= end_month:
-#             # Normal range (e.g., 3 to 8)
-#             df_final = df_final[
-#                 (df_final['MonthFromBase'] >= start_month) & 
-#                 (df_final['MonthFromBase'] <= end_month)
-#             ].copy()
-#         else:
-#             # Wrap-around range (e.g., 10 to 2 means 10-12 and 1-2)
-#             df_final = df_final[
-#                 (df_final['MonthFromBase'] >= start_month) | 
-#                 (df_final['MonthFromBase'] <= end_month)
-#             ].copy()
-    
-#     # Select the first 252 trading days for each year (or available data if less)
-#     df_final = df_final.groupby('Year').head(252)
-
-#     # Plot
-#     fig = go.Figure()
-
-#     for year, group in df_final.groupby('Year'):
-#         # Check if the year is the latest one, and bold it in the legend and graph
-#         year_label = f"<b>{year}</b>" if year == latest_year else str(year)
-        
-#         line_style = dict(width=4, dash='solid') if year == latest_year else dict(width=2, dash='dot')
-        
-#         fig.add_trace(go.Scatter(
-#             x=group['SeasonalTradingDay'],
-#             y=group['Spread'],
-#             mode='lines',
-#             name=year_label,
-#             line=line_style,
-#             hovertext=group['Date'].dt.strftime('%Y-%m-%d'),
-#             opacity=0.85
-#         ))
-
-#     # X-axis month ticks - adjust based on filtering
-#     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-#                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    
-#     if month_range:
-#         start_month, end_month = month_range
-#         if start_month <= end_month:
-#             filtered_months = list(range(start_month, end_month + 1))
-#         else:
-#             filtered_months = list(range(start_month, 13)) + list(range(1, end_month + 1))
-        
-#         month_labels = [month_names[(base_month_int - 1 + i - 1) % 12] for i in filtered_months]
-#         # Calculate positions based on actual data
-#         if not df_final.empty:
-#             month_positions = []
-#             for i, month_num in enumerate(filtered_months):
-#                 month_data = df_final[df_final['MonthFromBase'] == month_num]
-#                 if not month_data.empty:
-#                     # Use the first trading day of each month
-#                     pos = month_data['SeasonalTradingDay'].min()
-#                     month_positions.append(pos)
-#                 else:
-#                     # Estimate position
-#                     month_positions.append(i * 21 + 1)
-#     else:
-#         month_labels = [month_names[(base_month_int - 1 + i) % 12] for i in range(12)]
-#         month_positions = [i * 21 + 1 for i in range(12)]
-
-#     # Create title with filter info
-#     filter_info = ""
-#     if month_range:
-#         start_name = month_names[(base_month_int - 1 + month_range[0] - 1) % 12]
-#         end_name = month_names[(base_month_int - 1 + month_range[1] - 1) % 12]
-#         filter_info = f" (Filtered: {start_name} to {end_name})"
-    
-#     fig.update_layout(
-#         title=f"📊 Spread Seasonality Chart{filter_info}",
-#         xaxis=dict(
-#             title="Month", 
-#             tickvals=month_positions[:len(month_labels)], 
-#             ticktext=month_labels
-#         ),
-#         yaxis_title="Spread",
-#         height=600,
-#         template="plotly_white",
-#         showlegend=True
-#     )
-
-#     st.plotly_chart(fig, use_container_width=True)
 def plot_spread_seasonality(df_final, base_month_int, current_year, month_range=None):
     """
     Plot spread seasonality with optional month filtering
@@ -471,23 +340,38 @@ def plot_spread_seasonality(df_final, base_month_int, current_year, month_range=
     import plotly.graph_objects as go
     import pandas as pd
     import streamlit as st
-    import numpy as np
     
-    # Step 1: Initial data preparation
     # Ensure proper types
-    df_final = df_final.copy()  # Create a copy to avoid modifying the original dataframe
     df_final['Date'] = pd.to_datetime(df_final['Date'])
 
     # Extract year from Base_Instrument (last 2 digits)
     df_final['Year'] = df_final['Base_Instrument'].str.extract(r'(\d{2})$').astype(int) + 2000
-    
-    # Calculate month for each date
-    df_final['Month'] = df_final['Date'].dt.month
 
-    # Calculate the month position relative to base month (1 to 12)
-    df_final['MonthFromBase'] = ((df_final['Month'] - base_month_int) % 12) + 1
+    # Sort by Year (descending) and Date (ascending)
+    df_final = df_final.sort_values(['Year', 'Date'], ascending=[False, True]).copy()
+
+    # Get the latest year
+    latest_year = df_final['Year'].max()
+    start_date_for_latest_year = pd.to_datetime(f"{latest_year-1}-{base_month_int:02d}-01")
     
-    # Step 2: Apply month filtering if specified
+    # Filter data for the latest year to only include dates starting from base_month_int
+    df_final = df_final[
+        (df_final['Year'] != latest_year) | 
+        (df_final['Date'] >= start_date_for_latest_year)
+    ].copy()
+
+    # Create proper seasonal trading day index
+    def assign_seasonal_trading_day(group):
+        group = group.sort_values('Date')
+        group['SeasonalTradingDay'] = range(1, len(group) + 1)
+        # Add month relative to base month for filtering
+        group['Month'] = group['Date'].dt.month
+        group['MonthFromBase'] = ((group['Month'] - base_month_int) % 12) + 1
+        return group
+    
+    df_final = df_final.groupby('Year').apply(assign_seasonal_trading_day).reset_index(drop=True)
+
+    # Apply month filtering if specified
     if month_range:
         start_month, end_month = month_range
         if start_month <= end_month:
@@ -503,50 +387,13 @@ def plot_spread_seasonality(df_final, base_month_int, current_year, month_range=
                 (df_final['MonthFromBase'] <= end_month)
             ].copy()
     
-    # Step 3: Sort data by Year and Date for processing
-    df_final = df_final.sort_values(['Year', 'Date']).copy()
-    
-    # Step 4: Get the latest year
-    latest_year = df_final['Year'].max()
-    
-    # Step 5: For each year, get the last 252 observations (or all if less than 252)
-    years = df_final['Year'].unique()
-    filtered_dfs = []
-    
-    for year in years:
-        year_data = df_final[df_final['Year'] == year].copy()
-        year_data = year_data.tail(252)  # Get the last 252 observations for this year
-        if year == latest_year:
-            year_data = year_data[year_data.Date >= pd.to_datetime(f'{datetime.now().year}-01-01')]
-            st.write("LATEST YEAR")
-            st.write(year_data)
-        filtered_dfs.append(year_data)
-    
-    # Combine filtered data
-    df_final = pd.concat(filtered_dfs)
-    
-    # Step 6: Create sequential trading day for each year
-    # This step ensures proper alignment for plotting
-    result_dfs = []
-    
-    for year in years:
-        year_data = df_final[df_final['Year'] == year].copy()
-        # Sort by date to ensure proper order
-        year_data = year_data.sort_values('Date')
-        # Assign sequential trading days
-        year_data['SeasonalTradingDay'] = range(1, len(year_data) + 1)
-        result_dfs.append(year_data)
-    
-    # Combine results
-    df_final = pd.concat(result_dfs)
-    
-    # Step 7: Generate the plot
+    # Select the first 252 trading days for each year (or available data if less)
+    df_final = df_final.groupby('Year').head(252)
+
+    # Plot
     fig = go.Figure()
 
-    # Plot data for each year
-    for year in sorted(df_final['Year'].unique(), reverse=True):  # Newest years first
-        group = df_final[df_final['Year'] == year].sort_values('SeasonalTradingDay')
-        
+    for year, group in df_final.groupby('Year'):
         # Check if the year is the latest one, and bold it in the legend and graph
         year_label = f"<b>{year}</b>" if year == latest_year else str(year)
         
@@ -562,39 +409,46 @@ def plot_spread_seasonality(df_final, base_month_int, current_year, month_range=
             opacity=0.85
         ))
 
-    # Step 8: Create X-axis month ticks for proper labeling
+    # X-axis month ticks - adjust based on filtering
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     
-    # Create month ticks based on the actual data
-    # Group by month and find the first trading day of each month
-    month_positions = {}
-    
-    for year in df_final['Year'].unique():
-        year_data = df_final[df_final['Year'] == year]
-        for month in sorted(year_data['Month'].unique()):
-            month_data = year_data[year_data['Month'] == month]
-            if month not in month_positions and not month_data.empty:
-                month_positions[month] = month_data['SeasonalTradingDay'].min()
-    
-    # Sort month positions
-    sorted_months = sorted(month_positions.keys())
-    month_labels = [month_names[m-1] for m in sorted_months]
-    month_pos_values = [month_positions[m] for m in sorted_months]
-    
-    # Step 9: Create title with filter info
+    if month_range:
+        start_month, end_month = month_range
+        if start_month <= end_month:
+            filtered_months = list(range(start_month, end_month + 1))
+        else:
+            filtered_months = list(range(start_month, 13)) + list(range(1, end_month + 1))
+        
+        month_labels = [month_names[(base_month_int - 1 + i - 1) % 12] for i in filtered_months]
+        # Calculate positions based on actual data
+        if not df_final.empty:
+            month_positions = []
+            for i, month_num in enumerate(filtered_months):
+                month_data = df_final[df_final['MonthFromBase'] == month_num]
+                if not month_data.empty:
+                    # Use the first trading day of each month
+                    pos = month_data['SeasonalTradingDay'].min()
+                    month_positions.append(pos)
+                else:
+                    # Estimate position
+                    month_positions.append(i * 21 + 1)
+    else:
+        month_labels = [month_names[(base_month_int - 1 + i) % 12] for i in range(12)]
+        month_positions = [i * 21 + 1 for i in range(12)]
+
+    # Create title with filter info
     filter_info = ""
     if month_range:
         start_name = month_names[(base_month_int - 1 + month_range[0] - 1) % 12]
         end_name = month_names[(base_month_int - 1 + month_range[1] - 1) % 12]
         filter_info = f" (Filtered: {start_name} to {end_name})"
     
-    # Step 10: Update layout and display the chart
     fig.update_layout(
         title=f"📊 Spread Seasonality Chart{filter_info}",
         xaxis=dict(
-            title="Trading Day", 
-            tickvals=month_pos_values, 
+            title="Month", 
+            tickvals=month_positions[:len(month_labels)], 
             ticktext=month_labels
         ),
         yaxis_title="Spread",
@@ -604,6 +458,7 @@ def plot_spread_seasonality(df_final, base_month_int, current_year, month_range=
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 def plot_kde_distribution(df_final, month_range=None):
     """

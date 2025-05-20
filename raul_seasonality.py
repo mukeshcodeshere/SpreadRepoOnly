@@ -21,8 +21,7 @@ try:
     )
     REAL_DATA_AVAILABLE = True
 except ImportError:
-    st.error("❌ Cannot import data_engineering_tab6 module. Please ensure it's in the same directory.")
-    REAL_DATA_AVAILABLE = False
+    st.error("❌ Cannot import data_engineering_tab6 module. Please ensure it's in the same directory.") 
 
 # Set page config
 st.set_page_config(
@@ -235,13 +234,7 @@ def plot_spread_seasonality_enhanced(df_final, base_month_int, current_year):
 
 def main():
     st.markdown('<div class="big-title">📈 Commodity Spread Analysis Tool</div>', unsafe_allow_html=True)
-    
-    # Display data source status
-    if REAL_DATA_AVAILABLE:
-        st.success("✅ Using real market data from data_engineering_tab6")
-    else:
-        st.warning("⚠️ Real data module not available. Using mock data for demonstration.")
-    
+
     # Initialize list_of_input_instruments for real data mode
     list_of_input_instruments = None
     
@@ -308,7 +301,6 @@ def main():
         
         month_filter = add_month_filter_controls()
 
-    
     # Main content
     st.markdown("## 🔍 Configure Spread Analysis")
     
@@ -365,10 +357,10 @@ def main():
         default_configs = [
             {"Root Symbol": available_root_symbols[0] if available_root_symbols else "CL", 
              "Base Month": "M", "Comparison Month": "Z", 
-             "Spread Name": f"{available_root_symbols[0] if available_root_symbols else 'CL'} Z-M"},
+             "Spread Name": f"{available_root_symbols[0] if available_root_symbols else 'CL'} M-Z"},
             {"Root Symbol": available_root_symbols[1] if len(available_root_symbols) > 1 else "GC", 
              "Base Month": "G", "Comparison Month": "J", 
-             "Spread Name": f"{available_root_symbols[1] if len(available_root_symbols) > 1 else 'GC'} J-G"},
+             "Spread Name": f"{available_root_symbols[1] if len(available_root_symbols) > 1 else 'GC'} G-J"},
         ]
         
         default_df = pd.DataFrame(default_configs)
@@ -416,7 +408,7 @@ def main():
                     st.error(f"Row {idx + 1}: Base and Comparison months must be different")
                     continue
                 
-                spread_name = row["Spread Name"] if pd.notna(row["Spread Name"]) else f"{root_symbol} {comp_month}-{base_month}"
+                spread_name = row["Spread Name"] if pd.notna(row["Spread Name"]) else f"{root_symbol} {base_month}-{comp_month}"
                 
                 spread_configs.append({
                     'root_symbol': root_symbol,
@@ -439,7 +431,7 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
     
     for i, config in enumerate(spread_configs):
         st.markdown("---")
-        st.markdown(f"### 📈 Analysis {i+1}: {config['name']}")
+        st.markdown(f"### 📈 Analysis {i+1}")#: {config['name']}")
         
         # Generate instrument combinations
         base_instruments = []
@@ -512,8 +504,8 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
                 df_base = df_base[['Date', 'Close']].dropna(subset=['Date']).rename(columns={'Close': 'Base_Close'})
                 df_comp = df_comp[['Date', 'Close']].dropna(subset=['Date']).rename(columns={'Close': 'Comp_Close'})
                 
-                df_merged = pd.merge(df_comp, df_base, on='Date', how='inner')
-                df_merged['Spread'] = df_merged['Comp_Close'] - df_merged['Base_Close']
+                df_merged = pd.merge(df_base, df_comp, on='Date', how='inner')
+                df_merged['Spread'] = df_merged['Base_Close'] - df_merged['Comp_Close']
                 df_merged['Base_Instrument'] = base_instr
                 df_merged['Comp_Instrument'] = comp_instr
                 
@@ -555,7 +547,7 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
             
             # Generate plots with month filtering
             base_month_int = MONTH_CODE_MAP[config['base_month']]
-            
+
             # Call updated plotting functions with month_filter parameter
             plot_spread_seasonality(df_final, base_month_int, current_year, month_filter)
             plot_kde_distribution(df_final, month_filter)
