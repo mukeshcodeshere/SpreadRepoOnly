@@ -94,5 +94,9 @@ Here's your updated section incorporating the extended and refined information:
 To start the application, run the following command in your terminal:
 
 ```bash
+streamlit run raul_seasonality.py
+
+OR
+
 python -m streamlit run raul_seasonality.py
 ```
