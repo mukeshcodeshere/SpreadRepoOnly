@@ -327,11 +327,14 @@ def check_month_status(month_code_map):
             status_dict[month_char] = 'active_month'  # Running if the month is after current
 
     return status_dict
-
 def plot_spread_seasonality(df_final, base_month_int, base_expiry, month_filter=None, debug=True):
     if debug:
         print("START DEBUGGING")
         print("====================================")
+        print(f"[DEBUG] base_month_int: {base_month_int}")
+        print(f"[DEBUG] base_expiry: {base_expiry}")
+        print(f"[DEBUG] month_filter: {month_filter}")
+
     df = df_final.copy()
     df['Date'] = pd.to_datetime(df['Date'])
     df['Year'] = df['Base_Instrument'].str.extract(r'(\d{2})$').astype(int) + 2000
@@ -340,71 +343,58 @@ def plot_spread_seasonality(df_final, base_month_int, base_expiry, month_filter=
     # MonthFromBase: 1 for base_month_int, 2 for next, etc.
     df['MonthFromBase'] = ((df['Month'] - base_month_int) % 12) + 1
 
-    # Optional month filter
-    if month_filter:
-        start, end = month_filter
-        if start <= end:
-            df = df[(df['MonthFromBase'] >= start) & (df['MonthFromBase'] <= end)]
-        else:
-            df = df[(df['MonthFromBase'] >= start) | (df['MonthFromBase'] <= end)]
+    if debug:
+        print(f"[DEBUG] First few rows after MonthFromBase:\n{df[['Date', 'Month', 'MonthFromBase']].head()}")
+
+    # # Optional month filter
+    # if month_filter:
+    #     start, end = month_filter
+    #     if start <= end:
+    #         df = df[(df['MonthFromBase'] >= start) & (df['MonthFromBase'] <= end)]
+    #     else:
+    #         df = df[(df['MonthFromBase'] >= start) | (df['MonthFromBase'] <= end)]
+
+    #     if debug:
+    #         print(f"[DEBUG] Applied month filter: start={start}, end={end}")
+    #         print(f"[DEBUG] Rows remaining after filter: {len(df)}")
 
     df = df.sort_values(['Year', 'Date'])
+    st.write(df)
     result_dfs = []
 
-    # Assuming base_expiry, base_month_int, debug, and df are defined elsewhere
-    latest_year = df['Year'].max()  # Get the most recent year from the data
+    latest_year = df['Year'].max()
+    if debug:
+        print(f"[DEBUG] Latest year in dataset: {latest_year}")
 
     for year in df['Year'].unique():
-        # Debugging the loop and year values
         if debug:
+            print("\n------------------------------------")
             print(f"[DEBUG] Processing year: {year}")
-
-        # Calculate the start_date based on the base_expiry logic
+        
         if base_expiry == "expired_month":
             start_date = pd.to_datetime(f'{year - 1}-{base_month_int:02d}-01')
+            year_df = df[(df['Year'] == year) & (df['Date'] >= start_date)].copy()
             if debug:
-                print(f"[DEBUG] expired_month start_date: {start_date}") # NO PROBLEM HERE
-        elif base_expiry == "active_month":
-            if year == latest_year:
-                start_date = pd.to_datetime(f'{year - 1}-{base_month_int:02d}-01')  # Use this year
-                if debug:
-                    print(f"[DEBUG] active_month (latest_year) start_date: {start_date}")
-            else:
-                start_date = pd.to_datetime(f'{year - 1}-{base_month_int:02d}-01')  # Keep previous for past years
-                if debug:
-                    print(f"[DEBUG] active_month (previous year) start_date: {start_date}")
-        else:
-            raise ValueError("base_expiry must be 'expired_month' or 'active_month'")
+                print(f"[DEBUG] expired_month start_date for year {year}: {start_date}")
+        else: #active_month assumed
+            if year != current_year:
+                start_date = pd.to_datetime(f'{year - 1}-{base_month_int:02d}-01')
+                year_df = df[(df['Year'] == year) & (df['Date'] >= start_date)].copy()
+            else: #current_year and active month
+                start_date = pd.to_datetime(f'{year - 1}-{base_month_int:02d}-01')
+                year_df = df[(df['Year'] == year) & (df['Date'] >= start_date)].copy()
 
-        # Check for potential issues with base_month_int and year
+
         if not (1 <= base_month_int <= 12):
-            print(f"[ERROR] Invalid base_month_int: {base_month_int}. It should be between 1 and 12.")
-            continue
-
-        # Filter the dataframe for the current year and after the start_date
-        year_df = df[(df['Year'] == year) & (df['Date'] >= start_date) & (df['Date'] <= end_date)].copy()
-#active_month
-        # Debugging the filtered DataFrame
-        if debug:
-            print(f"[DEBUG] year_df after filtering (size): {year_df.shape[0]} rows")
-            print(f"[DEBUG] Start date for filtering: {start_date}")
-            print(f"[DEBUG] Year DataFrame: {year_df.head()}")  # Print the first few rows for inspection
-
-        # Debugging the size of the filtered DataFrame
-        if debug:
-            print(f"[DEBUG] Sorted year_df (after limiting to 252 rows): {year_df.shape[0]} rows")
-
-        # Check if the filtered dataframe is empty
-        if year_df.empty:
-            if debug:
-                print(f"[DEBUG] Skipping year {year}: no data after {start_date}")
+            print(f"[ERROR] Invalid base_month_int: {base_month_int}. Must be 1–12.")
             continue
 
         year_df['SeasonalTradingDay'] = range(1, len(year_df) + 1)
         result_dfs.append(year_df)
 
         if debug:
-            print(f"[DEBUG] Year: {year}, Start: {start_date.date()}, Rows: {len(year_df)}")
+            print(f"[DEBUG] Final row count for year {year}: {len(year_df)}")
+            print(f"[DEBUG] Appended to result_dfs")
 
     if not result_dfs:
         st.warning("No data to plot.")
@@ -429,10 +419,9 @@ def plot_spread_seasonality(df_final, base_month_int, base_expiry, month_filter=
             opacity=0.85
         ))
 
-    # Month tick positioning
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
+    
     first_year = seasonal_df['Year'].min()
     sample_df = seasonal_df[seasonal_df['Year'] == first_year]
     month_positions = (sample_df.groupby('Month')['SeasonalTradingDay']
@@ -443,7 +432,6 @@ def plot_spread_seasonality(df_final, base_month_int, base_expiry, month_filter=
     tickvals = [month_positions[m] for m in sorted_months if m in month_positions]
     ticktext = [month_names[m - 1] for m in sorted_months if m in month_positions]
 
-    # Title with filter info
     filter_info = ""
     if month_filter:
         start_name = month_names[(base_month_int - 1 + month_filter[0] - 1) % 12]

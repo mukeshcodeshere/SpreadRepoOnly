@@ -220,11 +220,15 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
                 df_base = df_base[['Date', 'Close']].dropna(subset=['Date']).rename(columns={'Close': 'Base_Close'})
                 df_comp = df_comp[['Date', 'Close']].dropna(subset=['Date']).rename(columns={'Close': 'Comp_Close'})
                 
-                df_merged = pd.merge(df_base, df_comp, on='Date', how='inner')
+                df_merged = pd.merge(df_base, df_comp, on='Date', how='left')
                 df_merged['Spread'] = df_merged['Base_Close'] - df_merged['Comp_Close']
                 df_merged['Base_Instrument'] = base_instr
                 df_merged['Comp_Instrument'] = comp_instr
-                
+                st.write(base_instr)
+                st.write(df_base)
+                st.write("===============")
+                st.write(df_merged)
+                df_merged.ffill(inplace=True) # temporary fix
                 spread_dfs.append(df_merged)
                 
             except Exception as e:
