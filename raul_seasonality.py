@@ -147,8 +147,8 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
     
     for i, config in enumerate(spread_configs):
         st.markdown("---")
-        st.markdown(f"### 📈 Analysis {i+1}")#: {config['name']}")
-        
+        st.markdown(f"### 📈 Analysis {i+1}: {config['name']}")
+
         # Generate instrument combinations
         base_instruments = []
         comp_instruments = []
@@ -173,7 +173,7 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
         else:
             base_year = current_year
         
-        # Generate historical instruments
+        # Generate historical instruments (wrong - doesn't account for historical spreads)
         # for year_offset in range(-years_back, 1):
         #     year_2digit = (base_year + year_offset) % 100
             

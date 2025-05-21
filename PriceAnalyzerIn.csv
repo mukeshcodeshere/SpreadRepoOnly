@@ -18,3 +18,12 @@ TD25 - TD20,"['#ICEWF5M','#ICEWACM']","['M','M']","[0, 0]","[1,-1]","[1,1]",HO,M
 TD25 - TC5,"['#ICEWF5M','#ICEWMJM']","['M','M']","[0, 0]","[1,-1]","[1,1]",HO,M/M,100%TD25 - 100%TC5,Freight,Global,3
 TD20 - TC20,"['#ICEWACM','#ICEWALM']","['M','M']","[0, 0]","[1,-1]","[1,1]",HO,M/M,100%TD20 - 100%TC20,Freight,Global,3
 HO Timing ,"['/HO','/HO']","['M','Z']","[0, 0]","[1,-1]","[1,1]",HO,M/Z,100%HOM - 100%HOZ,MiddleDistillates,US,10
+
+
+n assets
+box spreads
+#yearOffsetList - add to configs
+dec-dec spreads
+rollflag? --> non futures, for swaps
+
+
