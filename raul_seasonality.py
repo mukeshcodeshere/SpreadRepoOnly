@@ -174,15 +174,37 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
             base_year = current_year
         
         # Generate historical instruments
+        # for year_offset in range(-years_back, 1):
+        #     year_2digit = (base_year + year_offset) % 100
+            
+        #     base_instr = f"{config['root_symbol']}{config['base_month']}{year_2digit:02d}"
+        #     comp_instr = f"{config['root_symbol']}{config['comparison_month']}{year_2digit:02d}"
+            
+        #     base_instruments.append(base_instr)
+        #     comp_instruments.append(comp_instr)
+
+        # Generate historical instruments
         for year_offset in range(-years_back, 1):
-            year_2digit = (base_year + year_offset) % 100
-            
+            year = base_year + year_offset
+            year_2digit = year % 100
+
             base_instr = f"{config['root_symbol']}{config['base_month']}{year_2digit:02d}"
-            comp_instr = f"{config['root_symbol']}{config['comparison_month']}{year_2digit:02d}"
+
+            # Adjust comparison year if comparison month is less than base month
+            base_month_num = MONTH_CODE_MAP[config['base_month']]
+            comp_month_num = MONTH_CODE_MAP[config['comparison_month']]
             
+            if comp_month_num < base_month_num:
+                comp_year = year + 1
+            else:
+                comp_year = year
+
+            comp_year_2digit = comp_year % 100
+            comp_instr = f"{config['root_symbol']}{config['comparison_month']}{comp_year_2digit:02d}"
+
             base_instruments.append(base_instr)
             comp_instruments.append(comp_instr)
-        
+
         # Show instruments being analyzed
         with st.expander("📋 Instruments Being Analyzed", expanded=False):
             col1, col2 = st.columns(2)
@@ -197,12 +219,15 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
         spread_dfs = []
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
+
         for idx, (base_instr, comp_instr) in enumerate(zip(base_instruments, comp_instruments)):
             progress = (idx + 1) / len(base_instruments)
             progress_bar.progress(progress)
             status_text.text(f"Processing {base_instr} vs {comp_instr}...")
-            
+            st.write("-----")
+            st.write(base_instr)
+            st.write(comp_instr)
+            st.write("-----")
             try:
                 if REAL_DATA_AVAILABLE:
                     # Fetch real data
@@ -224,11 +249,11 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
                 df_merged['Spread'] = df_merged['Base_Close'] - df_merged['Comp_Close']
                 df_merged['Base_Instrument'] = base_instr
                 df_merged['Comp_Instrument'] = comp_instr
+                st.write("===============")
                 st.write(base_instr)
                 st.write(df_base)
-                st.write("===============")
                 st.write(df_merged)
-                df_merged.ffill(inplace=True) # temporary fix
+                st.write("===============")
                 spread_dfs.append(df_merged)
                 
             except Exception as e:
@@ -267,11 +292,7 @@ def process_spreads(spread_configs, start_date, end_date, years_back, max_retrie
             
             # Generate plots with month filtering
             base_month_int = MONTH_CODE_MAP[config['base_month']]
-            st.write(config['base_month'])
-            st.write(base_month_int)
-            st.write(base_expiry)
             df_final_plot['Year'] = df_final_plot['Base_Instrument'].str.extract(r'(\d{2})$').astype(int) + 2000
-            print(df_final_plot)
             # Call updated plotting functions with month_filter parameter plot_spread_seasonality(df, base_month_int, base_expiry):
             df_final = plot_spread_seasonality(df_final_plot, base_month_int ,base_expiry)#, month_filter)
             plot_kde_distribution(df_final, month_filter)

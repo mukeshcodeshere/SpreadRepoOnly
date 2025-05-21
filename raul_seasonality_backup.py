@@ -140,6 +140,169 @@ def get_available_root_symbols(list_of_input_instruments=None):
     # Fallback to common root symbols
     return ['/CL', '/HO', '/GCL' '/GC', '/SI', '/ES', '/NQ', '/ZC', '/ZS', '/ZW', '/NG']
 
+
+# Update your process_spreads function to use the filter:
+def process_spreads(spread_configs, start_date, end_date, years_back, max_retries, retry_delay, month_filter=None):
+    """Process spread configurations and generate analysis using real or mock data"""
+    
+    for i, config in enumerate(spread_configs):
+        st.markdown("---")
+        st.markdown(f"### 📈 Analysis {i+1}")#: {config['name']}")
+        
+        # Generate instrument combinations
+        base_instruments = []
+        comp_instruments = []
+        
+        # Determine year logic based on expiry
+        if REAL_DATA_AVAILABLE:
+            month_status = check_month_status(MONTH_CODE_MAP)
+        else:
+            # Fallback logic
+            month_status = {}
+            for month_code, month_num in MONTH_CODE_MAP.items():
+                if month_num <= current_month:
+                    month_status[month_code] = "expired_month"
+                else:
+                    month_status[month_code] = "active_month"
+        
+        base_expiry = month_status.get(config['base_month'], "Unknown")
+        
+        # Current year logic
+        if base_expiry == "expired_month":
+            base_year = current_year + 1
+        else:
+            base_year = current_year
+        
+        # Generate historical instruments
+        for year_offset in range(-years_back, 1):
+            year_2digit = (base_year + year_offset) % 100
+            
+            base_instr = f"{config['root_symbol']}{config['base_month']}{year_2digit:02d}"
+            comp_instr = f"{config['root_symbol']}{config['comparison_month']}{year_2digit:02d}"
+            
+            base_instruments.append(base_instr)
+            comp_instruments.append(comp_instr)
+        
+        # Show instruments being analyzed
+        with st.expander("📋 Instruments Being Analyzed", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Base Instruments:**")
+                st.write(base_instruments)
+            with col2:
+                st.write("**Comparison Instruments:**")
+                st.write(comp_instruments)
+        
+        # Generate and process data
+        spread_dfs = []
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, (base_instr, comp_instr) in enumerate(zip(base_instruments, comp_instruments)):
+            progress = (idx + 1) / len(base_instruments)
+            progress_bar.progress(progress)
+            status_text.text(f"Processing {base_instr} vs {comp_instr}...")
+            
+            try:
+                if REAL_DATA_AVAILABLE:
+                    # Fetch real data
+                    df_base = fetch_real_data(base_instr, max_retries, retry_delay)
+                    df_comp = fetch_real_data(comp_instr, max_retries, retry_delay)
+                else:
+                    # Generate mock data would go here
+                    df_base = None
+                    df_comp = None
+                
+                if df_base is None or df_comp is None or df_base.empty or df_comp.empty:
+                    continue
+                
+                # Merge and calculate spread
+                df_base = df_base[['Date', 'Close']].dropna(subset=['Date']).rename(columns={'Close': 'Base_Close'})
+                df_comp = df_comp[['Date', 'Close']].dropna(subset=['Date']).rename(columns={'Close': 'Comp_Close'})
+                
+                df_merged = pd.merge(df_base, df_comp, on='Date', how='outer')
+                df_merged['Spread'] = df_merged['Base_Close'] - df_merged['Comp_Close']
+                df_merged['Base_Instrument'] = base_instr
+                df_merged['Comp_Instrument'] = comp_instr
+                st.write(base_instr)
+                st.write(df_base)
+                st.write("===============")
+                st.write(df_merged)
+                df_merged.ffill(inplace=True) # temporary fix
+                spread_dfs.append(df_merged)
+                
+            except Exception as e:
+                st.warning(f"Could not process {base_instr} vs {comp_instr}: {str(e)}")
+                continue
+        
+        # Clear progress indicators
+        progress_bar.empty()
+        status_text.empty()
+
+        if spread_dfs:
+            # Combine all spread data
+            df_final_plot = pd.concat(spread_dfs, ignore_index=True)
+            df_final_plot = df_final_plot[['Date', 'Base_Instrument', 'Comp_Instrument', 'Base_Close', 'Comp_Close', 'Spread']]
+            
+            # Apply month filtering information for display
+            filtered_info = ""
+            if month_filter:
+                month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                base_month_int = MONTH_CODE_MAP[config['base_month']]
+                start_name = month_names[(base_month_int - 1 + month_filter[0] - 1) % 12]
+                end_name = month_names[(base_month_int - 1 + month_filter[1] - 1) % 12]
+                filtered_info = f" (Filtered: {start_name} to {end_name})"
+            
+            # Display summary statistics
+            st.markdown(f"#### Summary Statistics{filtered_info}")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Records", f"{len(df_final_plot):,}")
+            with col2:
+                st.metric("Mean Spread", f"{df_final_plot['Spread'].mean():.3f}")
+            with col3:
+                st.metric("Std Deviation", f"{df_final_plot['Spread'].std():.3f}")
+            
+            # Generate plots with month filtering
+            base_month_int = MONTH_CODE_MAP[config['base_month']]
+            st.write(config['base_month'])
+            st.write(base_month_int)
+            st.write(base_expiry)
+            df_final_plot['Year'] = df_final_plot['Base_Instrument'].str.extract(r'(\d{2})$').astype(int) + 2000
+            print(df_final_plot)
+            # Call updated plotting functions with month_filter parameter plot_spread_seasonality(df, base_month_int, base_expiry):
+            df_final = plot_spread_seasonality(df_final_plot, base_month_int ,base_expiry)#, month_filter)
+            plot_kde_distribution(df_final, month_filter)
+            
+            # Data preview
+            with st.expander(f"📊 Detailed Data for {config['name']}", expanded=False):
+                # Show filtered data count if filter is applied
+                if month_filter and 'MonthFromBase' in df_final.columns:
+                    start_month, end_month = month_filter
+                    if start_month <= end_month:
+                        filtered_df = df_final[
+                            (df_final['MonthFromBase'] >= start_month) & 
+                            (df_final['MonthFromBase'] <= end_month)
+                        ]
+                    else:
+                        filtered_df = df_final[
+                            (df_final['MonthFromBase'] >= start_month) | 
+                            (df_final['MonthFromBase'] <= end_month)
+                        ]
+                    st.info(f"Showing {len(filtered_df):,} records out of {len(df_final):,} total records (filtered)")
+                    st.dataframe(filtered_df, use_container_width=True)
+                else:
+                    st.dataframe(df_final, use_container_width=True)
+                
+                # Additional statistics
+                st.subheader("📈 Statistical Summary")
+                summary_stats = df_final['Spread'].describe()
+                st.dataframe(summary_stats.to_frame().T, use_container_width=True)
+        else:
+            st.error(f"❌ No data available for {config['name']}")
+
 def main():
     st.markdown('<div class="big-title">📈 Commodity Spread Analysis Tool</div>', unsafe_allow_html=True)
 
@@ -252,7 +415,7 @@ def main():
                     'root_symbol': final_root,
                     'base_month': base_month,
                     'comparison_month': comp_month,
-                    'name': f"{final_root} {comp_month}-{base_month}"
+                    'name': f"{final_root} {base_month}-{comp_month}"
                 }]
                 process_spreads(spread_configs, start_date, end_date, years_back, max_retries, retry_delay, month_filter)
             else:
@@ -333,158 +496,5 @@ def main():
             else:
                 st.warning("No valid configurations found")
 
-# Update your process_spreads function to use the filter:
-def process_spreads(spread_configs, start_date, end_date, years_back, max_retries, retry_delay, month_filter=None):
-    """Process spread configurations and generate analysis using real or mock data"""
-    
-    for i, config in enumerate(spread_configs):
-        st.markdown("---")
-        st.markdown(f"### 📈 Analysis {i+1}")#: {config['name']}")
-        
-        # Generate instrument combinations
-        base_instruments = []
-        comp_instruments = []
-        
-        # Determine year logic based on expiry
-        if REAL_DATA_AVAILABLE:
-            month_status = check_month_status(MONTH_CODE_MAP)
-        else:
-            # Fallback logic
-            month_status = {}
-            for month_code, month_num in MONTH_CODE_MAP.items():
-                if month_num <= current_month:
-                    month_status[month_code] = "expired_month"
-                else:
-                    month_status[month_code] = "active_month"
-        
-        base_expiry = month_status.get(config['base_month'], "Unknown")
-        
-        # Current year logic
-        if base_expiry == "expired_month":
-            base_year = current_year + 1
-        else:
-            base_year = current_year
-        
-        # Generate historical instruments
-        for year_offset in range(-years_back, 1):
-            year_2digit = (base_year + year_offset) % 100
-            
-            base_instr = f"{config['root_symbol']}{config['base_month']}{year_2digit:02d}"
-            comp_instr = f"{config['root_symbol']}{config['comparison_month']}{year_2digit:02d}"
-            
-            base_instruments.append(base_instr)
-            comp_instruments.append(comp_instr)
-        
-        # Show instruments being analyzed
-        with st.expander("📋 Instruments Being Analyzed", expanded=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write("**Base Instruments:**")
-                st.write(base_instruments)
-            with col2:
-                st.write("**Comparison Instruments:**")
-                st.write(comp_instruments)
-        
-        # Generate and process data
-        spread_dfs = []
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        for idx, (base_instr, comp_instr) in enumerate(zip(base_instruments, comp_instruments)):
-            progress = (idx + 1) / len(base_instruments)
-            progress_bar.progress(progress)
-            status_text.text(f"Processing {base_instr} vs {comp_instr}...")
-            
-            try:
-                if REAL_DATA_AVAILABLE:
-                    # Fetch real data
-                    df_base = fetch_real_data(base_instr, max_retries, retry_delay)
-                    df_comp = fetch_real_data(comp_instr, max_retries, retry_delay)
-                else:
-                    # Generate mock data would go here
-                    df_base = None
-                    df_comp = None
-                
-                if df_base is None or df_comp is None or df_base.empty or df_comp.empty:
-                    continue
-                
-                # Merge and calculate spread
-                df_base = df_base[['Date', 'Close']].dropna(subset=['Date']).rename(columns={'Close': 'Base_Close'})
-                df_comp = df_comp[['Date', 'Close']].dropna(subset=['Date']).rename(columns={'Close': 'Comp_Close'})
-                
-                df_merged = pd.merge(df_base, df_comp, on='Date', how='inner')
-                df_merged['Spread'] = df_merged['Base_Close'] - df_merged['Comp_Close']
-                df_merged['Base_Instrument'] = base_instr
-                df_merged['Comp_Instrument'] = comp_instr
-                
-                spread_dfs.append(df_merged)
-                
-            except Exception as e:
-                st.warning(f"Could not process {base_instr} vs {comp_instr}: {str(e)}")
-                continue
-        
-        # Clear progress indicators
-        progress_bar.empty()
-        status_text.empty()
-
-        if spread_dfs:
-            # Combine all spread data
-            df_final = pd.concat(spread_dfs, ignore_index=True)
-            df_final = df_final[['Date', 'Base_Instrument', 'Comp_Instrument', 'Base_Close', 'Comp_Close', 'Spread']]
-            
-            # Apply month filtering information for display
-            filtered_info = ""
-            if month_filter:
-                month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                base_month_int = MONTH_CODE_MAP[config['base_month']]
-                start_name = month_names[(base_month_int - 1 + month_filter[0] - 1) % 12]
-                end_name = month_names[(base_month_int - 1 + month_filter[1] - 1) % 12]
-                filtered_info = f" (Filtered: {start_name} to {end_name})"
-            
-            # Display summary statistics
-            st.markdown(f"#### Summary Statistics{filtered_info}")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Records", f"{len(df_final):,}")
-            with col2:
-                st.metric("Mean Spread", f"{df_final['Spread'].mean():.3f}")
-            with col3:
-                st.metric("Std Deviation", f"{df_final['Spread'].std():.3f}")
-            
-            # Generate plots with month filtering
-            base_month_int = MONTH_CODE_MAP[config['base_month']]
-
-            # Call updated plotting functions with month_filter parameter
-            df_final = plot_spread_seasonality(df_final, base_month_int, current_year, month_filter)
-            plot_kde_distribution(df_final, month_filter)
-            
-            # Data preview
-            with st.expander(f"📊 Detailed Data for {config['name']}", expanded=False):
-                # Show filtered data count if filter is applied
-                if month_filter and 'MonthFromBase' in df_final.columns:
-                    start_month, end_month = month_filter
-                    if start_month <= end_month:
-                        filtered_df = df_final[
-                            (df_final['MonthFromBase'] >= start_month) & 
-                            (df_final['MonthFromBase'] <= end_month)
-                        ]
-                    else:
-                        filtered_df = df_final[
-                            (df_final['MonthFromBase'] >= start_month) | 
-                            (df_final['MonthFromBase'] <= end_month)
-                        ]
-                    st.info(f"Showing {len(filtered_df):,} records out of {len(df_final):,} total records (filtered)")
-                    st.dataframe(filtered_df, use_container_width=True)
-                else:
-                    st.dataframe(df_final, use_container_width=True)
-                
-                # Additional statistics
-                st.subheader("📈 Statistical Summary")
-                summary_stats = df_final['Spread'].describe()
-                st.dataframe(summary_stats.to_frame().T, use_container_width=True)
-        else:
-            st.error(f"❌ No data available for {config['name']}")
 if __name__ == "__main__":
     main()

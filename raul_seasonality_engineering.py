@@ -346,18 +346,6 @@ def plot_spread_seasonality(df_final, base_month_int, base_expiry, month_filter=
     if debug:
         print(f"[DEBUG] First few rows after MonthFromBase:\n{df[['Date', 'Month', 'MonthFromBase']].head()}")
 
-    # # Optional month filter
-    # if month_filter:
-    #     start, end = month_filter
-    #     if start <= end:
-    #         df = df[(df['MonthFromBase'] >= start) & (df['MonthFromBase'] <= end)]
-    #     else:
-    #         df = df[(df['MonthFromBase'] >= start) | (df['MonthFromBase'] <= end)]
-
-    #     if debug:
-    #         print(f"[DEBUG] Applied month filter: start={start}, end={end}")
-    #         print(f"[DEBUG] Rows remaining after filter: {len(df)}")
-
     df = df.sort_values(['Year', 'Date'])
     st.write(df)
     result_dfs = []
